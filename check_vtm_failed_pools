@@ -1,0 +1,77 @@
+#!/usr/bin/env python2
+"""
+check vTM Pools per rest_url API
+"""
+
+import json
+import urllib2
+import argparse
+import ssl
+import base64
+
+
+def main():
+    """
+    Main Class
+    """
+
+    ctx = ''
+    failure = ''
+
+    parser = argparse.ArgumentParser(description='check vTM Pools per rest_url API.')
+    parser.add_argument('--host', type=str, default='',
+                        required=True,
+                        help='host to check (default: )')
+    parser.add_argument('--no-verify-ssl', default=False, action='store_true',
+                        dest='verify',
+                        help='verify ssl certificate (default: True )')
+    parser.add_argument('--debug', default=False, action='store_true',
+                        dest='debug',
+                        help='print json reply (default: False )')
+    parser.add_argument('--username', type=str, default='',
+                        required=True,
+                        help='username (default: )')
+    parser.add_argument('--password', type=str, default='',
+                        required=True,
+                        help='password (default: )')
+    parser.add_argument('--port', type=str, default='9070',
+                        required=False,
+                        help='password (default: 9070 )')
+    parser.add_argument('--version', type=str, default='5.1',
+                        required=False,
+                        help='API Version (default: 5.1)')
+
+    args = parser.parse_args()
+
+    rest_url = "https://"+args.host+":"+args.port+"/api/tm/"+args.version+"/status/"+args.host+"/state"
+
+    if args.verify is True:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+    request = urllib2.Request(rest_url)
+    base64string = base64.encodestring('%s:%s' % (args.username, args.password)).replace('\n', '')
+    request.add_header("Authorization", "Basic %s" % base64string)
+    response = urllib2.urlopen(request, context=ctx)
+
+    data = json.load(response)
+
+    if args.debug is True:
+        print(json.dumps(data, indent=2, sort_keys=True))
+
+    for failed in data["state"]["failed_nodes"]:
+        if failed["node"]:
+            for failed_pools in failed["pools"]:
+                print("Node "+failed["node"]+" failed for Pool "+failed_pools)
+            failure = True
+
+    if failure is True:
+        exit(2)
+    else:
+        print("Everything seems to be fine")
+        exit(0)
+
+
+if __name__ == "__main__":
+    main()
