@@ -1,0 +1,59 @@
+#!/usr/bin/env python2
+"""
+check pulp repository sync
+"""
+
+import json
+import urllib2
+import base64
+import argparse
+from datetime import datetime
+
+PARSER = argparse.ArgumentParser(description='Check Status of Repository Sync.')
+
+PARSER.add_argument('--uri', type=str, default='',
+                    required=True,
+                    help='url of rest api(default: e.g. https://<server>/pulp/api/v2 )')
+PARSER.add_argument('--username', type=str, default='',
+                    required=True,
+                    help='username (default: )')
+PARSER.add_argument('--password', type=str, default='',
+                    required=True,
+                    help='password (default: )')
+PARSER.add_argument('--warning', type=int, default='5',
+                    required=False,
+                    help='warning in days(default: 5 )')
+PARSER.add_argument('--critical', type=int, default='15',
+                    required=False,
+                    help='critical in days(default: 15 )')
+
+
+ARGS = PARSER.parse_args()
+NOW = datetime.today()
+DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+REST_URI = ARGS.uri
+REPOSITORIES = ARGS.uri + '/repositories/'
+REQUEST = urllib2.Request(REPOSITORIES)
+BASE64STRING = base64.b64encode('%s:%s' % (ARGS.username, ARGS.password))
+REQUEST.add_header("Authorization", "Basic %s" % BASE64STRING)
+j = json.load(urllib2.urlopen(REQUEST))
+
+for val in j:
+    if val["display_name"] is not None:
+        REQUEST = urllib2.Request(REPOSITORIES + val["display_name"] + '/distributors/')
+        BASE64STRING = base64.b64encode('%s:%s' % (ARGS.username, ARGS.password))
+        REQUEST.add_header("Authorization", "Basic %s" % BASE64STRING)
+        x = json.load(urllib2.urlopen(REQUEST))
+        for z in x:
+            if z["last_publish"] is not None:
+                LAST_PUBLISHED = datetime.strptime(z["last_publish"], DATE_FORMAT)
+                DELTA = NOW - LAST_PUBLISHED
+                if DELTA.days > ARGS.critical:
+                    print("CRITICAL: " + val["display_name"] + " Last published " + str(DELTA.days) + " days ago")
+                    exit(2)
+                if DELTA.days > ARGS.warning:
+                    print("WARNING: " + val["display_name"] + " Last published " + str(DELTA.days) + " days ago")
+                    exit(1)
+
+print("OK, all repository syncs working")
+exit(0)
