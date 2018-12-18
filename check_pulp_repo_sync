@@ -23,9 +23,9 @@ PARSER.add_argument('--password', type=str, default='',
 PARSER.add_argument('--warning', type=int, default='5',
                     required=False,
                     help='warning in days(default: 5 )')
-PARSER.add_argument('--critical', type=int, default='15',
+PARSER.add_argument('--critical', type=int, default='250',
                     required=False,
-                    help='critical in days(default: 15 )')
+                    help='critical in days(default: 250 )')
 
 
 ARGS = PARSER.parse_args()
@@ -40,20 +40,27 @@ j = json.load(urllib2.urlopen(REQUEST))
 
 for val in j:
     if val["display_name"] is not None:
-        REQUEST = urllib2.Request(REPOSITORIES + val["display_name"] + '/distributors/')
+        REQUEST = urllib2.Request(REPOSITORIES + val["display_name"] + '/importers/')
         BASE64STRING = base64.b64encode('%s:%s' % (ARGS.username, ARGS.password))
         REQUEST.add_header("Authorization", "Basic %s" % BASE64STRING)
-        x = json.load(urllib2.urlopen(REQUEST))
-        for z in x:
-            if z["last_publish"] is not None:
-                LAST_PUBLISHED = datetime.strptime(z["last_publish"], DATE_FORMAT)
-                DELTA = NOW - LAST_PUBLISHED
-                if DELTA.days > ARGS.critical:
-                    print("CRITICAL: " + val["display_name"] + " Last published " + str(DELTA.days) + " days ago")
-                    exit(2)
-                if DELTA.days > ARGS.warning:
-                    print("WARNING: " + val["display_name"] + " Last published " + str(DELTA.days) + " days ago")
-                    exit(1)
+        importers = json.load(urllib2.urlopen(REQUEST))
+
+        for importer in importers:
+            if "feed" in importer["config"]:
+                REQUEST = urllib2.Request(REPOSITORIES + val["display_name"] + '/distributors/')
+                BASE64STRING = base64.b64encode('%s:%s' % (ARGS.username, ARGS.password))
+                REQUEST.add_header("Authorization", "Basic %s" % BASE64STRING)
+                x = json.load(urllib2.urlopen(REQUEST))
+                for z in x:
+                    if z["last_publish"] is not None:
+                        LAST_PUBLISHED = datetime.strptime(z["last_publish"], DATE_FORMAT)
+                        DELTA = NOW - LAST_PUBLISHED
+                        if DELTA.days > ARGS.critical:
+                            print("CRITICAL: " + val["display_name"] + " Last published " + str(DELTA.days) + " days ago")
+                            exit(2)
+                        if DELTA.days > ARGS.warning:
+                            print("WARNING: " + val["display_name"] + " Last published " + str(DELTA.days) + " days ago")
+                            exit(1)
 
 print("OK, all repository syncs working")
 exit(0)
